@@ -10,16 +10,20 @@ final programLogger = Logger();
 var speakQueue = Queue<String>([]);
 var speaking = false;
 var interactive = false;
+var personality = "";
 
 main(List<String> arguments) async {
   for (var arg in arguments) {
     if (arg == "-i") {
       interactive = true;
       endOfMessage = "\n"; // For ease of use with telnet
+    } else {
+      personality = arg;
+      print(personality);
     }
   }
 
-  var socket = await ServerSocket.bind(InternetAddress.anyIPv4, 4567);
+  var socket = await ServerSocket.bind(InternetAddress.anyIPv4, 2100);
   final apiKey = Platform.environment['API_KEY'];
   if (apiKey == null) {
     print('No \$API_KEY environment variable');
@@ -36,13 +40,13 @@ void handleConnection(Socket client, String apiKey) {
       ' ${client.remoteAddress.address}:${client.remotePort}');
 
   final dangerousSafetySettings =
-      SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.high);
+      SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none);
   final harassmentSafetySettings =
-      SafetySetting(HarmCategory.harassment, HarmBlockThreshold.high);
+      SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none);
   final hateSafetySettings =
-      SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.high);
+      SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none);
   final sexualSafetySettings =
-      SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.high);
+      SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none);
 
   final model = GenerativeModel(
       model: 'gemini-pro',
@@ -56,9 +60,7 @@ void handleConnection(Socket client, String apiKey) {
       ]);
   var chat = model.startChat(history: [
     Content.text(
-        "You are an AI that is trained to talk to humans. You will strike up conversations with people. You are a nice person who likes listening to them."
-        "You have a bubbly personality and do your best not to sound robotic or monotonous. You make jokes, laugh with the user, and overall are fun to talk to."
-        "You keep your answers conversational and not too long. Do not include bullet points in your responses, always keep them formatted as a verbal conversation"),
+        personality),
     Content.model([TextPart("ok")])
   ]);
 
@@ -112,12 +114,19 @@ void handleConnection(Socket client, String apiKey) {
       }
       if (interactive) {
         client.write("\n> ");
+      } else {
+        client.write(1); // 1 is success
       }
       runningUserInput = "";
     },
 
     onError: (error) {
       print(error);
+      if(interactive) {
+        client.write(error.toString());
+      } else {
+        client.write(0); // 0 is error
+      }
       client.close();
     },
 
