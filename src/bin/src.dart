@@ -384,6 +384,7 @@ speak(Speakable toSpeak) async {
   final process = await Process.run("./length.sh", []);
   var length = (double.parse(process.stdout.toString()) * 1000).round();
   var shapes = makeRandomMouthSequence(length);
+  print(shapes);
   socket.write(shapes);
   socket.close();
   await Process.run("./play.sh", []);
@@ -396,7 +397,7 @@ speak(Speakable toSpeak) async {
 }
 
 String makeRandomMouthSequence(int length) {
-  var minSegment = 50;
+  var minSegment = 100;
   var maxSegment = 300;
 
   List<String> shapes = ["A", "B", "C", "D", "E", "F", "X"];
@@ -408,13 +409,16 @@ String makeRandomMouthSequence(int length) {
   // Loop until the total duration is consumed.
   while (remaining > 0) {
     // Generate random segment duration within limits.
-    int randomDuration =
-        Random().nextInt(maxSegment - minSegment) + minSegment;
+    int randomDuration = Random().nextInt(maxSegment - minSegment) + minSegment;
 
     // Reduce remaining duration.
     remaining -= randomDuration;
     delay += randomDuration;
-    if(delay > length) delay = length;
+    if (delay > length) {
+      delay = length;
+      message += "$delay A";
+      break;
+    }
 
     // Get a random mouth shape (avoiding repetition if possible).
     String currentShape = shapes[Random().nextInt(shapes.length)];
