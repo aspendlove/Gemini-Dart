@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -28,7 +29,7 @@ var speakQueue = Queue<Speakable>([]);
 var speaking = false;
 var faceShapes = false;
 var interactive = false;
-var personality = Personality("","female");
+var personality = Personality("", "female");
 List<String> maleVoices = [
   "arctic",
   "danny",
@@ -183,20 +184,19 @@ List<String> speechPatterns = [
 ];
 
 Personality craftPersonality() {
-
   genders.shuffle();
   personalityTraits.shuffle();
   speechPatterns.shuffle();
   var gender = genders[0];
   var name = "Terra";
-  if(gender == "male") {
+  if (gender == "male") {
     maleNames.shuffle();
     name = maleNames[0];
   } else if (gender == "female") {
     femaleNames.shuffle();
     name = femaleNames[0];
   } else {
-    if(Random().nextBool()) {
+    if (Random().nextBool()) {
       maleNames.shuffle();
       name = maleNames[0];
     } else {
@@ -261,18 +261,17 @@ void handleConnection(Socket client, String apiKey) {
   print('Connection from'
       ' ${client.remoteAddress.address}:${client.remotePort}');
 
-
   personality = craftPersonality();
 
   var random = Random();
   var voice = "amy";
 
-  if(personality.gender == "male") {
+  if (personality.gender == "male") {
     voice = maleVoices[random.nextInt(maleVoices.length)];
   } else if (personality.gender == "female") {
     voice = femaleVoices[random.nextInt(femaleVoices.length)];
   } else {
-    if(random.nextBool()) {
+    if (random.nextBool()) {
       voice = maleVoices[random.nextInt(maleVoices.length)];
     } else {
       voice = femaleVoices[random.nextInt(femaleVoices.length)];
@@ -280,13 +279,13 @@ void handleConnection(Socket client, String apiKey) {
   }
 
   final dangerousSafetySettings =
-  SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none);
+      SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none);
   final harassmentSafetySettings =
-  SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none);
+      SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none);
   final hateSafetySettings =
-  SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none);
+      SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none);
   final sexualSafetySettings =
-  SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none);
+      SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none);
 
   final model = GenerativeModel(
       model: 'gemini-pro',
@@ -310,7 +309,7 @@ void handleConnection(Socket client, String apiKey) {
   // listen for events from the client
   client.listen(
     // handle data from the client
-        (Uint8List data) async {
+    (Uint8List data) async {
       runningUserInput += String.fromCharCodes(data);
       if (!runningUserInput.endsWith(endOfMessage)) return;
       runningUserInput = runningUserInput.trim();
@@ -380,39 +379,49 @@ void handleConnection(Socket client, String apiKey) {
 }
 
 speak(Speakable toSpeak) async {
-  startFaceShapes();
+  final socket = await Socket.connect('127.0.0.1', 7654);
   await Process.run("./piper.sh", [toSpeak.text, toSpeak.voice]);
-  faceShapes = false;
-  // await sendWavFile("http://127.0.0.1:5000", "temp.wav");
-  // await Process.run("./play.sh", []);
-  // try {
-  //   File file = File("temp.wav");
-  //   file.deleteSync();
-  // } catch (e) {
-  //   print("temp does not exist");
-  // }
+  final process = await Process.run("./length.sh", []);
+  var length = (double.parse(process.stdout.toString()) * 1000).round();
+  var shapes = makeRandomMouthSequence(length);
+  socket.write(shapes);
+  socket.close();
+  await Process.run("./play.sh", []);
+  try {
+    File file = File("temp.wav");
+    file.deleteSync();
+  } catch (e) {
+    print("temp does not exist");
+  }
 }
 
-startFaceShapes() async {
-  // if (faceShapes) return;
-  // faceShapes = true;
-  // final socket = await Socket.connect('127.0.0.1', 7654);
-  // List<String> shapes = ["A", "B", "C", "D", "E", "F", "X"];
-  // var lastShape = "A";
-  // final random = Random();
-  // while (faceShapes) {
-  //   int randomDuration = random.nextInt(300) + 50;
-  //   String randomShape = lastShape;
-  //   while (randomShape == lastShape) {
-  //     randomShape = shapes[random.nextInt(7)];
-  //   }
-  //   String toSend = "0.0 $randomShape\r\n\r\n";
-  //   print(toSend);
-  //   socket.write(toSend);
-  //   await Future.delayed(Duration(milliseconds: randomDuration));
-  // }
-  // socket.write("0.0 A\r\n\r\n");
-  // socket.close();
+String makeRandomMouthSequence(int length) {
+  var minSegment = 50;
+  var maxSegment = 300;
+
+  List<String> shapes = ["A", "B", "C", "D", "E", "F", "X"];
+
+  var delay = 0;
+  var remaining = length;
+  var message = "";
+
+  // Loop until the total duration is consumed.
+  while (remaining > 0) {
+    // Generate random segment duration within limits.
+    int randomDuration =
+        Random().nextInt(maxSegment - minSegment) + minSegment;
+
+    // Reduce remaining duration.
+    remaining -= randomDuration;
+    delay += randomDuration;
+    if(delay > length) delay = length;
+
+    // Get a random mouth shape (avoiding repetition if possible).
+    String currentShape = shapes[Random().nextInt(shapes.length)];
+    message += "$delay $currentShape\r\n";
+  }
+
+  return "$message\r\n";
 }
 
 startSpeaking() async {
@@ -424,17 +433,18 @@ startSpeaking() async {
   speaking = false;
 }
 
-// Future<http.StreamedResponse> sendWavFile(String url, String filePath) async {
-//   var request = http.MultipartRequest('POST', Uri.parse(url));
-//   request.files.add(await http.MultipartFile.fromPath('wavFile', filePath, contentType: MediaType('audio', 'wav')));
-//   var response = await request.send();
-//
-//   if (response.statusCode == 200) {
-//     // Success
-//     return response;
-//   } else {
-//     // Handle error
-//     print('Error sending file: ${response.statusCode}');
-//     return response;
-//   }
-// }
+Future<http.StreamedResponse> sendWavFile(String url, String filePath) async {
+  var request = http.MultipartRequest('POST', Uri.parse(url));
+  request.files.add(await http.MultipartFile.fromPath('wavFile', filePath,
+      contentType: MediaType('audio', 'wav')));
+  var response = await request.send();
+
+  if (response.statusCode == 200) {
+    // Success
+    return response;
+  } else {
+    // Handle error
+    print('Error sending file: ${response.statusCode}');
+    return response;
+  }
+}
