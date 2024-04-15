@@ -402,4 +402,4 @@ packages:
     source: hosted
     version: "3.1.2"
 sdks:
-  dart: ">=3.4.0-edge.42ccd79cd12a640359fb729537f5b14a06055188 <4.0.0"
+  dart: ">=3.4.0-edge.03101837d9101c571a1ff617c9dbee0b6cc2e131 <4.0.0"

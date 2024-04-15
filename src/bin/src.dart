@@ -379,14 +379,14 @@ void handleConnection(Socket client, String apiKey) {
 }
 
 speak(Speakable toSpeak) async {
-  final socket = await Socket.connect('127.0.0.1', 7654);
+  // final socket = await Socket.connect('127.0.0.1', 7654);
   await Process.run("./piper.sh", [toSpeak.text, toSpeak.voice]);
   final process = await Process.run("./length.sh", []);
   var length = (double.parse(process.stdout.toString()) * 1000).round();
   var shapes = makeRandomMouthSequence(length);
-  print(shapes);
-  socket.write(shapes);
-  socket.close();
+  // print(shapes);
+  // socket.write(shapes);
+  // socket.close();
   await Process.run("./play.sh", []);
   try {
     File file = File("temp.wav");
