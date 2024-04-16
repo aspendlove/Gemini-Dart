@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -245,19 +244,20 @@ main(List<String> arguments) async {
     }
   }
 
-  var socket = await ServerSocket.bind(InternetAddress.anyIPv4, 2100);
+  var terraSocket = await Socket.connect("127.0.0.1", 7654);
+  var serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, 2100);
   final apiKey = Platform.environment['API_KEY'];
   if (apiKey == null) {
     print('No \$API_KEY environment variable');
     exit(1);
   }
 
-  socket.listen((client) {
-    handleConnection(client, apiKey);
+  serverSocket.listen((client) {
+    handleConnection(client, terraSocket, apiKey);
   });
 }
 
-void handleConnection(Socket client, String apiKey) {
+void handleConnection(Socket client, Socket terraSocket, String apiKey) {
   print('Connection from'
       ' ${client.remoteAddress.address}:${client.remotePort}');
 
@@ -337,13 +337,13 @@ void handleConnection(Socket client, String apiKey) {
               }
               speakQueue.pushAll(speakFragments);
               runningResponse = speakable.last;
-              startSpeaking();
+              startSpeaking(terraSocket);
             }
             stdout.write(chunk.text);
           }
         }
         speakQueue.push(Speakable(runningResponse, voice));
-        await startSpeaking();
+        await startSpeaking(terraSocket);
         print("\n");
       } on Exception {
         final moderationFailMessage =
@@ -351,7 +351,7 @@ void handleConnection(Socket client, String apiKey) {
         if (interactive) {
           client.write(moderationFailMessage);
         }
-        await speak(Speakable(moderationFailMessage, voice));
+        await speak(Speakable(moderationFailMessage, voice), terraSocket);
         chat = model.startChat(history: chat.history.toList());
       }
       if (interactive) {
@@ -378,15 +378,13 @@ void handleConnection(Socket client, String apiKey) {
   );
 }
 
-speak(Speakable toSpeak) async {
-  // final socket = await Socket.connect('127.0.0.1', 7654);
+speak(Speakable toSpeak, Socket terraSocket) async {
   await Process.run("./piper.sh", [toSpeak.text, toSpeak.voice]);
   final process = await Process.run("./length.sh", []);
   var length = (double.parse(process.stdout.toString()) * 1000).round();
   var shapes = makeRandomMouthSequence(length);
-  // print(shapes);
-  // socket.write(shapes);
-  // socket.close();
+  print(shapes);
+  terraSocket.write(shapes);
   await Process.run("./play.sh", []);
   try {
     File file = File("temp.wav");
@@ -425,14 +423,14 @@ String makeRandomMouthSequence(int length) {
     message += "$delay $currentShape\r\n";
   }
 
-  return "$message\r\n";
+  return "$message\r\n\r\n";
 }
 
-startSpeaking() async {
+startSpeaking(Socket terraSocket) async {
   if (speaking) return;
   speaking = true;
   while (speakQueue.hasNext()) {
-    await speak(speakQueue.pop());
+    await speak(speakQueue.pop(), terraSocket);
   }
   speaking = false;
 }
